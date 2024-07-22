@@ -1,0 +1,2 @@
+receive_dir: "input_videos"
+processed_dir: "output_videos"
