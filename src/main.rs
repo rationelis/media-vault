@@ -5,9 +5,7 @@ mod compressor;
 use compressor::VideoCompressor;
 
 fn main() {
-    let config = Config::from_file("config.yaml").unwrap();
-    
-    let compressor = VideoCompressor::new("ffmpeg".to_string(), config);
+    let compressor = VideoCompressor::new("ffmpeg".to_string());
 
     let result = compressor.compress_video("input.mp4", "output.mp4");
     match result {

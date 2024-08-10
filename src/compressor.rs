@@ -1,16 +1,12 @@
-use crate::config::Config;
-
 use std::process::Command;
 
 pub struct VideoCompressor {
-    config: Config,
     ffmpeg_path: String,
 }
 
 impl VideoCompressor {
-    pub fn new(ffmpeg_path: String, config: Config) -> VideoCompressor { 
+    pub fn new(ffmpeg_path: String) -> VideoCompressor { 
         VideoCompressor {
-            config,
             ffmpeg_path,
         }
     }
