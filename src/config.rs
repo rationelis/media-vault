@@ -3,8 +3,10 @@ use std::fs;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    pub receive_dir: String,
-    pub processed_dir: String,
+    pub mode: String,
+    pub polling_interval: u64,
+    pub in_dir: String,
+    pub out_dir: String,
 }
 
 impl Config {
@@ -15,4 +17,3 @@ impl Config {
             .map_err(|err| format!("Failed to parse config file: {}", err))
     }
 }
-

@@ -1,9 +1,0 @@
-version: '3.8'
-
-services:
-  rust-app:
-    build: .
-    container_name: media_vault
-    volumes:
-      - .:/app
-

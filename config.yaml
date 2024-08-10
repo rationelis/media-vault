@@ -1,0 +1,4 @@
+mode: buffer
+polling_interval: 1
+in_dir: in
+out_dir: out
