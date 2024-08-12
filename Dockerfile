@@ -2,6 +2,8 @@
 FROM rust:latest AS builder
 WORKDIR /app
 
+RUN mkdir -p in out
+
 COPY Cargo.toml .
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release
@@ -10,9 +12,7 @@ COPY src src
 RUN touch src/main.rs
 RUN cargo build --release
 
-#RUN strip target/release/media_vault
-
-# Step 2: Run the project
+# Step 2: Copy the binary to a new image
 FROM gcr.io/distroless/cc-debian12
 WORKDIR /app
 
