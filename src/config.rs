@@ -7,7 +7,9 @@ pub struct Config {
     pub polling_interval: u64,
     pub in_dir: String,
     pub out_dir: String,
+    pub clear_in_dir: bool,
     pub ffmpeg_path: String,
+    pub log_level: String,
 }
 
 impl Config {

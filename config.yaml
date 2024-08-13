@@ -2,4 +2,6 @@ mode: worker
 polling_interval: 1
 in_dir: in
 out_dir: out
+clear_in_dir: false
 ffmpeg_path: /opt/homebrew/bin/ffmpeg
+log_level: info
