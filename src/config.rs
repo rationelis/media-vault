@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::fs;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub mode: String,
     pub polling_interval: u64,
@@ -18,5 +18,16 @@ impl Config {
             .map_err(|err| format!("Failed to read config file: {}", err))?;
         serde_yaml::from_str(&config_content)
             .map_err(|err| format!("Failed to parse config file: {}", err))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_parsing() {
+        let config = Config::from_file("config.yaml");
+        assert!(config.is_ok());
     }
 }

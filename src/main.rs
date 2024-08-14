@@ -5,14 +5,32 @@ mod compressor;
 use compressor::VideoCompressor;
 
 mod logger;
-
 use logger::init_logger;
-use log::LevelFilter;
+use thiserror::Error;
+use regex::Regex;
+use lazy_static::lazy_static;
 
 use std::fs;
 use std::time::{Duration, Instant};
 use std::thread;
 use std::path::PathBuf;
+use std::io::Error;
+
+#[derive(Error, Debug)]
+pub enum NodeError {
+    #[error("Failed to read directory: {0}")]
+    ReadDirError(String),
+
+    #[error("Failed to remove file: {0}")]
+    RemoveFileError(String),
+
+    #[error("Failed to compress file: {0}")]
+    CompressFileError(String),
+}
+
+lazy_static! {
+    static ref COMPRESS_RE: Regex = Regex::new(r"(.*)_compressed_\d+\.mp4").unwrap();
+}
 
 #[derive(Debug)]
 enum Mode {
@@ -38,8 +56,7 @@ impl Node {
             _ => panic!("Invalid mode"),
         };
 
-        let compressor = VideoCompressor::new(config.ffmpeg_path)
-            .unwrap_or_else(|e| panic!("Failed to create compressor with error: {:?}", e));
+        let compressor = VideoCompressor::new(config.ffmpeg_path).unwrap_or_else(|e| panic!("Failed to create compressor with error: {:?}", e));
 
         Node {
             mode,
@@ -53,73 +70,151 @@ impl Node {
 
     fn run(&self) {
         loop {
-            log::debug!("Start poll");
-
             match self.mode {
                 Mode::Buffer => self.handle_buffer_mode(),
                 Mode::Worker => self.handle_worker_mode(),
             }
 
-            log::debug!("End poll");
-            
             thread::sleep(self.polling_interval);
         } 
     } 
     
     fn handle_buffer_mode(&self) {
-        println!("Buffer mode not implemented yet"); 
-    }
+        let scan_in = self.scan_directory(&self.in_dir);
 
-    fn handle_worker_mode(&self) {
-        let files = self.scan_directory(&self.in_dir);
+        let in_files = match scan_in {
+            Ok(files) => files,
+            Err(e) => {
+                log::error!("Failed to scan input directory with error: {:?}", e);
+                return;
+            }
+        };
 
-        log::debug!("Found {} files in directory: {:?}", files.len(), self.in_dir);
+        let scan_out = self.scan_directory(&self.out_dir);
 
-        for file in files {
-            log::info!("Start compressing file: {:?}", file);
+        let out_files = match scan_out {
+            Ok(files) => files,
+            Err(e) => {
+                log::error!("Failed to scan output directory with error: {:?}", e);
+                return;
+            }
+        };
 
-            let start_time = Instant::now();
+        let to_delete: Vec<_> = in_files
+            .into_iter()
+            .filter(|file| {
+                out_files.iter().any(|out_file| self.is_file_pair(file, out_file))
+            })
+        .collect();
 
-            match self.compressor.compress_video(&file, &self.out_dir) {
-                Ok(_) => {
-                    let duration = start_time.elapsed().as_secs_f32().round();
-                    
-                    log::info!("Done compressing file. Duration: {}s", duration);
-                    log::debug!("Removing file? {:?}", self.clear_in_dir);
+        if to_delete.is_empty() {
+            log::info!("No files to delete");
+            return;
+        }
 
-                    if self.clear_in_dir {
-                        fs::remove_file(&file)
-                            .unwrap_or_else(|e| log::error!("Failed to remove file: {:?} with error: {:?}", file, e));
-                    }
+        log::info!("Deleting files: {:?}", to_delete);
+        
+        if self.clear_in_dir {
+            for file in to_delete {
+                if let Err(e) = self.remove_file(&file) {
+                    log::error!("Failed to remove file: {:?} with error: {:?}", file, e);
                 } 
-                Err(e) => {
-                    log::error!("Failed to compress file: {:?} with error: {:?}", file, e);
-                }
+                log::info!("Removed file: {:?}", file);
             }
         }
     }
 
-    fn scan_directory(&self, dir: &PathBuf) -> Vec<PathBuf> {
+    fn handle_worker_mode(&self) {
+        let scan_in = self.scan_directory(&self.in_dir);
+
+        let files = match scan_in {
+            Ok(files) => files,
+            Err(e) => {
+                log::error!("Failed to scan input directory with error: {:?}", e);
+                return;
+            }
+        };
+
+        for file in files {
+            log::info!("Start compressing file: {:?}", file);
+            let start_time = Instant::now();
+
+            if let Err(e) = self.compressor.compress_video(&file, &self.out_dir) {
+                log::error!("Failed to compress file: {:?} with error: {:?}", file, e);
+                continue;
+            }
+
+            let duration = start_time.elapsed().as_secs_f32().round();
+            log::info!("Done compressing file. Duration: {}s", duration);
+
+            if self.clear_in_dir {
+                if let Err(e) = self.remove_file(&file) {
+                    log::error!("Failed to remove file: {:?} with error: {:?}", file, e);
+                } 
+                log::info!("Removed file: {:?}", file);
+            }
+        }
+    }
+
+    fn remove_file(&self, file: &PathBuf) -> Result<(), NodeError> {
+        fs::remove_file(file)
+            .map_err(|e| NodeError::RemoveFileError(e.to_string()))
+    }
+
+    fn scan_directory(&self, dir: &PathBuf) -> Result<Vec<PathBuf>, NodeError> {
         fs::read_dir(dir)
-            .unwrap_or_else(|e| {
-                log::error!("Failed to read directory {:?} with error: {:?}", dir, e);
-                panic!("Failed to read directory");
-            })
-        .filter_map(Result::ok)
-            .map(|entry| entry.path())
-            .collect()
+            .map_err(|e| NodeError::ReadDirError(e.to_string()))
+            .and_then(|dir| {
+                dir.map(|entry| entry.map(|e| e.path()))
+                    .collect::<Result<Vec<PathBuf>, Error>>()
+                    .map_err(|e| NodeError::ReadDirError(e.to_string()))
+        })
+    }
+
+    fn is_file_pair(&self, in_file: &PathBuf, out_file: &PathBuf) -> bool {
+        let in_file_name = in_file.file_name().unwrap().to_str().unwrap();
+        let out_file_name = out_file.file_name().unwrap().to_str().unwrap();
+
+        if let Some(caps) = COMPRESS_RE.captures(out_file_name) { 
+            let name = caps.get(1).unwrap().as_str();
+            return in_file_name.starts_with(name);
+        }
+
+        false
     }
 }
 
 fn main() {
-    let config = Config::from_file("config.yaml");
+    let config = Config::from_file("config.yaml").unwrap_or_else(|e| panic!("Failed to read config file with error: {:?}", e));
+    let _ = init_logger(config.log_level.clone());
 
-    init_logger(config.as_ref().map(|c| c.log_level.clone()).unwrap_or_else(|_| "info".to_string()))
-        .unwrap_or_else(|e| panic!("Failed to initialize logger with error: {:?}", e)); 
-
-    let node = Node::new(config.unwrap());
+    let node = Node::new(config);
     
     log::info!("Starting node with config: {:?}", node);
-
     node.run();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_file_pair() {
+        let config = Config::from_file("config.yaml").unwrap();
+        let node = Node::new(config);
+
+        let in_file = PathBuf::from("in/PXL_20240328_160158851.TS.mp4");
+        let out_file = PathBuf::from("out/PXL_20240328_160158851_compressed_1.mp4");
+        assert!(node.is_file_pair(&in_file, &out_file));
+
+        let in_file = PathBuf::from("in/PXL_20240328_160158852.TS.mp4");
+        assert!(!node.is_file_pair(&in_file, &out_file));
+
+        let out_file = PathBuf::from("out/PXL_20240328_160158851_compressed_.mp4");
+        assert!(!node.is_file_pair(&in_file, &out_file));
+
+        let in_file = PathBuf::from("in/.mp4");
+        let out_file = PathBuf::from("out/_compressed_1.mp4");
+        assert!(node.is_file_pair(&in_file, &out_file));
+    }
 }
