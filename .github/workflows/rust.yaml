@@ -1,0 +1,49 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Where FFmpeg
+        run: which ffmpeg
+
+      - name: Test FFmpeg
+        run: ffmpeg -version
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Create config
+        run: mv config_example.yaml config.yaml
+
+      - name: Make in and out directories
+        run: mkdir in out test_data/out
+
+      - name: Run tests
+        run: cargo build --verbose
+        
+      - name: Run tests
+        run: cargo test --verbose

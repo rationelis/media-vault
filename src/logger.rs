@@ -1,5 +1,5 @@
 use log::{LevelFilter, Metadata, Record, SetLoggerError};
-use simplelog::{Config, TermLogger, TerminalMode, ColorChoice};
+use simplelog::{ColorChoice, Config, TermLogger, TerminalMode};
 
 pub struct SimpleLogger;
 
@@ -10,12 +10,7 @@ impl log::Log for SimpleLogger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
-            eprintln!(
-                "{} [{}] {}",
-                record.level(),
-                record.target(),
-                record.args()
-            );
+            eprintln!("{} [{}] {}", record.level(), record.target(), record.args());
         }
     }
 

@@ -5,16 +5,16 @@ mod compressor;
 use compressor::VideoCompressor;
 
 mod logger;
-use logger::init_logger;
-use thiserror::Error;
-use regex::Regex;
 use lazy_static::lazy_static;
+use logger::init_logger;
+use regex::Regex;
+use thiserror::Error;
 
 use std::fs;
-use std::time::{Duration, Instant};
-use std::thread;
-use std::path::PathBuf;
 use std::io::Error;
+use std::path::PathBuf;
+use std::thread;
+use std::time::{Duration, Instant};
 
 #[derive(Error, Debug)]
 pub enum NodeError {
@@ -46,7 +46,7 @@ struct Node {
     out_dir: PathBuf,
     compressor: VideoCompressor,
     clear_in_dir: bool,
-} 
+}
 
 impl Node {
     fn new(config: Config) -> Self {
@@ -56,12 +56,13 @@ impl Node {
             _ => panic!("Invalid mode"),
         };
 
-        let compressor = VideoCompressor::new(config.ffmpeg_path).unwrap_or_else(|e| panic!("Failed to create compressor with error: {:?}", e));
+        let compressor = VideoCompressor::new(config.ffmpeg_path)
+            .unwrap_or_else(|e| panic!("Failed to create compressor with error: {:?}", e));
 
         Node {
             mode,
             polling_interval: Duration::from_secs(config.polling_interval * 60),
-            in_dir:  PathBuf::from(&config.in_dir),
+            in_dir: PathBuf::from(&config.in_dir),
             out_dir: PathBuf::from(&config.out_dir),
             clear_in_dir: config.clear_in_dir,
             compressor,
@@ -76,9 +77,9 @@ impl Node {
             }
 
             thread::sleep(self.polling_interval);
-        } 
-    } 
-    
+        }
+    }
+
     fn handle_buffer_mode(&self) {
         let scan_in = self.scan_directory(&self.in_dir);
 
@@ -102,10 +103,8 @@ impl Node {
 
         let to_delete: Vec<_> = in_files
             .into_iter()
-            .filter(|file| {
-                out_files.iter().any(|out_file| self.is_file_pair(file, out_file))
-            })
-        .collect();
+            .filter(|file| out_files.iter().any(|out_file| self.is_file_pair(file, out_file)))
+            .collect();
 
         if to_delete.is_empty() {
             log::info!("No files to delete");
@@ -113,12 +112,12 @@ impl Node {
         }
 
         log::info!("Deleting files: {:?}", to_delete);
-        
+
         if self.clear_in_dir {
             for file in to_delete {
                 if let Err(e) = self.remove_file(&file) {
                     log::error!("Failed to remove file: {:?} with error: {:?}", file, e);
-                } 
+                }
                 log::info!("Removed file: {:?}", file);
             }
         }
@@ -150,15 +149,14 @@ impl Node {
             if self.clear_in_dir {
                 if let Err(e) = self.remove_file(&file) {
                     log::error!("Failed to remove file: {:?} with error: {:?}", file, e);
-                } 
+                }
                 log::info!("Removed file: {:?}", file);
             }
         }
     }
 
     fn remove_file(&self, file: &PathBuf) -> Result<(), NodeError> {
-        fs::remove_file(file)
-            .map_err(|e| NodeError::RemoveFileError(e.to_string()))
+        fs::remove_file(file).map_err(|e| NodeError::RemoveFileError(e.to_string()))
     }
 
     fn scan_directory(&self, dir: &PathBuf) -> Result<Vec<PathBuf>, NodeError> {
@@ -168,14 +166,14 @@ impl Node {
                 dir.map(|entry| entry.map(|e| e.path()))
                     .collect::<Result<Vec<PathBuf>, Error>>()
                     .map_err(|e| NodeError::ReadDirError(e.to_string()))
-        })
+            })
     }
 
     fn is_file_pair(&self, in_file: &PathBuf, out_file: &PathBuf) -> bool {
         let in_file_name = in_file.file_name().unwrap().to_str().unwrap();
         let out_file_name = out_file.file_name().unwrap().to_str().unwrap();
 
-        if let Some(caps) = COMPRESS_RE.captures(out_file_name) { 
+        if let Some(caps) = COMPRESS_RE.captures(out_file_name) {
             let name = caps.get(1).unwrap().as_str();
             return in_file_name.starts_with(name);
         }
@@ -185,11 +183,12 @@ impl Node {
 }
 
 fn main() {
-    let config = Config::from_file("config.yaml").unwrap_or_else(|e| panic!("Failed to read config file with error: {:?}", e));
+    let config =
+        Config::from_file("config.yaml").unwrap_or_else(|e| panic!("Failed to read config file with error: {:?}", e));
     let _ = init_logger(config.log_level.clone());
 
     let node = Node::new(config);
-    
+
     log::info!("Starting node with config: {:?}", node);
     node.run();
 }

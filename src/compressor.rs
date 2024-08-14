@@ -1,5 +1,5 @@
-use std::process::{Command, Output};
 use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
 use std::time::SystemTime;
 use thiserror::Error;
 
@@ -29,37 +29,64 @@ impl VideoCompressor {
             return Err(CompressionError::FfmpegNotFound(ffmpeg_path));
         }
         Ok(VideoCompressor { ffmpeg_path })
-    } 
+    }
 
     pub fn compress_video(&self, input_file: &Path, output_dir: &Path) -> Result<PathBuf, CompressionError> {
         if !input_file.exists() {
+            eprintln!("Input file not found: {}", input_file.display());
             return Err(CompressionError::InputFileNotFound(
                 input_file.to_str().unwrap().to_string(),
             ));
         }
 
+        eprintln!("Compressing video: {}", input_file.display());
+
         let output_file = self.get_output_name(input_file, output_dir);
 
         let ffmpeg_args = [
-            "-vcodec", "libx265",
-            "-b:v", "1000k",
-            "-r", "24",
-            "-acodec", "aac",
-            "-strict", "experimental",
+            "-vcodec",
+            "libx265",
+            "-b:v",
+            "1000k",
+            "-r",
+            "24",
+            "-acodec",
+            "aac",
+            "-strict",
+            "experimental",
         ];
 
-        let output = self.run_ffmpeg(input_file, &output_file, &ffmpeg_args)?;
+        let output = self.run_ffmpeg(input_file, &output_file, &ffmpeg_args);
 
-        if !output.status.success() {
-            return Err(CompressionError::FfmpegError(
-                String::from_utf8_lossy(&output.stderr).into_owned(),
-            ));
+        eprintln!("Output file: {}", output_file.display());
+
+        match output {
+            Ok(output) => {
+                if !output.status.success() {
+                    eprintln!(
+                        "FFmpeg error: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                    return Err(CompressionError::FfmpegError(
+                        String::from_utf8_lossy(&output.stderr).into_owned(),
+                    ));
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to execute FFmpeg: {}", e);
+                return Err(e);
+            }
         }
 
-        Ok(output_file) 
+        Ok(output_file)
     }
 
-     fn run_ffmpeg(&self, input_file: &Path, output_file: &PathBuf, ffmpeg_args: &[&str]) -> Result<Output, CompressionError> {
+    fn run_ffmpeg(
+        &self,
+        input_file: &Path,
+        output_file: &PathBuf,
+        ffmpeg_args: &[&str],
+    ) -> Result<Output, CompressionError> {
         Command::new(&self.ffmpeg_path)
             .arg("-i")
             .arg(input_file)
@@ -82,7 +109,7 @@ impl VideoCompressor {
             input_file.extension().unwrap().to_str().unwrap()
         );
 
-        out_dir.join(out_name) 
+        out_dir.join(out_name)
     }
 }
 
@@ -101,7 +128,7 @@ mod tests {
             Err(CompressionError::FfmpegNotFound(path)) => assert_eq!(path, "nonexistent_path"),
             _ => panic!("Expected FfmpegNotFound error"),
         }
-    } 
+    }
 
     #[test]
     fn test_output_name_generation() {
@@ -147,7 +174,9 @@ mod tests {
         assert!(result.is_err());
 
         match result {
-            Err(CompressionError::InputFileNotFound(path)) => assert_eq!(path, "test_data/in/nonexistent.mp4"),
+            Err(CompressionError::InputFileNotFound(path)) => {
+                assert_eq!(path, "test_data/in/nonexistent.mp4")
+            }
             _ => panic!("Expected InputFileNotFound error"),
         }
     }

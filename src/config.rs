@@ -14,10 +14,9 @@ pub struct Config {
 
 impl Config {
     pub fn from_file(file_path: &str) -> Result<Self, String> {
-        let config_content = fs::read_to_string(file_path)
-            .map_err(|err| format!("Failed to read config file: {}", err))?;
-        serde_yaml::from_str(&config_content)
-            .map_err(|err| format!("Failed to parse config file: {}", err))
+        let config_content =
+            fs::read_to_string(file_path).map_err(|err| format!("Failed to read config file: {}", err))?;
+        serde_yaml::from_str(&config_content).map_err(|err| format!("Failed to parse config file: {}", err))
     }
 }
 
