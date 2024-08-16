@@ -58,8 +58,6 @@ impl VideoCompressor {
 
         let output = self.run_ffmpeg(input_file, &output_file, &ffmpeg_args);
 
-        eprintln!("Output file: {}", output_file.display());
-
         match output {
             Ok(output) => {
                 if !output.status.success() {
