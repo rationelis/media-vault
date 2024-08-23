@@ -83,7 +83,7 @@ impl Node {
     fn handle_buffer_mode(&self) {
         let scan_in = self.scan_directory(&self.in_dir);
 
-        let in_files = match scan_in {
+        let mut in_files = match scan_in {
             Ok(files) => files,
             Err(e) => {
                 log::error!("Failed to scan input directory with error: {:?}", e);
@@ -91,15 +91,19 @@ impl Node {
             }
         };
 
+        in_files = in_files.into_iter().filter(|file| file.extension().is_some()).collect();
+
         let scan_out = self.scan_directory(&self.out_dir);
 
-        let out_files = match scan_out {
+        let mut out_files = match scan_out {
             Ok(files) => files,
             Err(e) => {
                 log::error!("Failed to scan output directory with error: {:?}", e);
                 return;
             }
         };
+
+        out_files = out_files.into_iter().filter(|file| file.extension().is_some()).collect();
 
         let to_delete: Vec<_> = in_files
             .into_iter()
@@ -126,13 +130,15 @@ impl Node {
     fn handle_worker_mode(&self) {
         let scan_in = self.scan_directory(&self.in_dir);
 
-        let files = match scan_in {
+        let mut files = match scan_in {
             Ok(files) => files,
             Err(e) => {
                 log::error!("Failed to scan input directory with error: {:?}", e);
                 return;
             }
         };
+
+        files = files.into_iter().filter(|file| file.extension().is_some()).collect();
 
         for file in files {
             log::info!("Start compressing file: {:?}", file);
