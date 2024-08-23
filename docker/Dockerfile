@@ -27,6 +27,4 @@ COPY --from=ffmpeg-installer /usr/lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu
 COPY --from=ffmpeg-installer /usr/lib/x86_64-linux-gnu/libblas.so.3 /usr/lib/x86_64-linux-gnu/libblas.so.3
 COPY --from=ffmpeg-installer /usr/lib/x86_64-linux-gnu/liblapack.so.3 /usr/lib/x86_64-linux-gnu/liblapack.so.3
 
-COPY config.yaml .
-
 CMD ["./media-vault"]
