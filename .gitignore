@@ -1,6 +1,9 @@
 /target
 
-/in
-/out
+/media-vault-in
+/media-vault-out
+
+build.sh
+run.sh
 
 config.yaml

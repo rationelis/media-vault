@@ -16,8 +16,6 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-RUN find /usr/lib -name libblas.so.3
-
 # Step 3: Copy the binary and ffmpeg to the final image
 FROM gcr.io/distroless/cc-debian12
 WORKDIR /app
