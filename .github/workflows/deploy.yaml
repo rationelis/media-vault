@@ -1,9 +1,5 @@
 name: Deploy to GHCR.io
 
-permissions:
-  contents: read
-  packages: write
-
 on: workflow_dispatch
 
 jobs:
@@ -32,6 +28,6 @@ jobs:
         with:
           context: .
           file: Dockerfile
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/media-vault:${{ github.sha }}
+          tags: ghcr.io/${{ github.repository_owner }}/media-vault:${{ github.run_number }}
