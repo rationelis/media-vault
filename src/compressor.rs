@@ -130,7 +130,7 @@ mod tests {
 
     #[test]
     fn test_output_name_generation() {
-        let config = Config::from_file("config.yaml").unwrap();
+        let config = Config::from_file("config/config.yaml").unwrap();
         let compressor = VideoCompressor::new(config.ffmpeg_path).unwrap();
 
         let input_file = Path::new("test_video.mp4");
@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn test_compress_video() {
-        let config = Config::from_file("config.yaml").unwrap();
+        let config = Config::from_file("config/config.yaml").unwrap();
         let compressor = VideoCompressor::new(config.ffmpeg_path).unwrap();
 
         let input_file = Path::new("test_data/in/example.mp4");
@@ -162,7 +162,7 @@ mod tests {
 
     #[test]
     fn test_compress_video_error() {
-        let config = Config::from_file("config.yaml").unwrap();
+        let config = Config::from_file("config/config.yaml").unwrap();
         let compressor = VideoCompressor::new(config.ffmpeg_path).unwrap();
 
         let input_file = Path::new("test_data/in/nonexistent.mp4");

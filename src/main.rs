@@ -190,7 +190,7 @@ impl Node {
 
 fn main() {
     let config =
-        Config::from_file("config.yaml").unwrap_or_else(|e| panic!("Failed to read config file with error: {:?}", e));
+        Config::from_file("config/config.yaml").unwrap_or_else(|e| panic!("Failed to read config file with error: {:?}", e));
     let _ = init_logger(config.log_level.clone());
 
     let node = Node::new(config);
@@ -205,7 +205,7 @@ mod tests {
 
     #[test]
     fn test_is_file_pair() {
-        let config = Config::from_file("config.yaml").unwrap();
+        let config = Config::from_file("config/config.yaml").unwrap();
         let node = Node::new(config);
 
         let in_file = PathBuf::from("in/PXL_20240328_160158851.TS.mp4");

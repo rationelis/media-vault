@@ -26,7 +26,7 @@ mod tests {
 
     #[test]
     fn test_config_parsing() {
-        let config = Config::from_file("config.yaml");
+        let config = Config::from_file("config/config.yaml");
         assert!(config.is_ok());
     }
 }
