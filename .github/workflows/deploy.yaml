@@ -1,5 +1,9 @@
 name: Deploy to GHCR.io
 
+permissions:
+  contents: read
+  packages: write
+
 on: workflow_dispatch
 
 jobs:
