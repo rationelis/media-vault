@@ -1,6 +1,5 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::time::SystemTime;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -31,17 +30,12 @@ impl VideoCompressor {
         Ok(VideoCompressor { ffmpeg_path })
     }
 
-    pub fn compress_video(&self, input_file: &Path, output_dir: &Path) -> Result<PathBuf, CompressionError> {
+    pub fn compress_video(&self, input_file: &Path, output: &Path) -> Result<PathBuf, CompressionError> {
         if !input_file.exists() {
-            eprintln!("Input file not found: {}", input_file.display());
             return Err(CompressionError::InputFileNotFound(
                 input_file.to_str().unwrap().to_string(),
             ));
         }
-
-        eprintln!("Compressing video: {}", input_file.display());
-
-        let output_file = self.get_output_name(input_file, output_dir);
 
         let ffmpeg_args = [
             "-vcodec",
@@ -56,58 +50,42 @@ impl VideoCompressor {
             "experimental",
         ];
 
-        let output = self.run_ffmpeg(input_file, &output_file, &ffmpeg_args);
+        let result = self.run_ffmpeg(input_file, &output, &ffmpeg_args);
 
-        match output {
-            Ok(output) => {
-                if !output.status.success() {
+        match result {
+            Ok(result) => {
+                if !result.status.success() {
                     eprintln!(
                         "FFmpeg error: {}",
-                        String::from_utf8_lossy(&output.stderr)
+                        String::from_utf8_lossy(&result.stderr).into_owned()
                     );
                     return Err(CompressionError::FfmpegError(
-                        String::from_utf8_lossy(&output.stderr).into_owned(),
+                        String::from_utf8_lossy(&result.stderr).into_owned(),
                     ));
-                }
+                } 
             }
             Err(e) => {
                 eprintln!("Failed to execute FFmpeg: {}", e);
                 return Err(e);
             }
-        }
+        };
 
-        Ok(output_file)
+        Ok(output.to_path_buf())
     }
 
     fn run_ffmpeg(
         &self,
         input_file: &Path,
-        output_file: &PathBuf,
+        output: &Path,
         ffmpeg_args: &[&str],
     ) -> Result<Output, CompressionError> {
         Command::new(&self.ffmpeg_path)
             .arg("-i")
             .arg(input_file)
             .args(ffmpeg_args)
-            .arg(output_file)
+            .arg(output)
             .output()
             .map_err(CompressionError::ExecutionError)
-    }
-
-    fn get_output_name(&self, input_file: &Path, out_dir: &Path) -> PathBuf {
-        let timestamp = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        let out_name = format!(
-            "{}_compressed_{}.{}",
-            input_file.file_stem().unwrap().to_str().unwrap(),
-            timestamp,
-            input_file.extension().unwrap().to_str().unwrap()
-        );
-
-        out_dir.join(out_name)
     }
 }
 
@@ -116,6 +94,7 @@ mod tests {
     use super::*;
 
     use crate::config::Config;
+    use crate::FileManager;
     use std::fs;
 
     #[test]
@@ -129,29 +108,16 @@ mod tests {
     }
 
     #[test]
-    fn test_output_name_generation() {
-        let config = Config::from_file("config/config.yaml").unwrap();
-        let compressor = VideoCompressor::new(config.ffmpeg_path).unwrap();
-
-        let input_file = Path::new("test_video.mp4");
-        let output_dir = Path::new("output");
-
-        let output_name = compressor.get_output_name(input_file, output_dir);
-        let output_name_str = output_name.to_str().unwrap();
-
-        assert!(output_name_str.starts_with("output/test_video_compressed_"));
-        assert!(output_name_str.ends_with(".mp4"));
-    }
-
-    #[test]
     fn test_compress_video() {
         let config = Config::from_file("config/config.yaml").unwrap();
         let compressor = VideoCompressor::new(config.ffmpeg_path).unwrap();
 
         let input_file = Path::new("test_data/in/example.mp4");
-        let out_dir = Path::new("test_data/out");
 
-        let result = compressor.compress_video(input_file, out_dir);
+        let file_manager = FileManager::new("test_data/in".to_string(), "test_data/out".to_string());
+        let output = file_manager.get_output_name(input_file);
+
+        let result = compressor.compress_video(input_file, &output);
         assert!(result.is_ok());
 
         let output_file = result.unwrap();
@@ -166,9 +132,11 @@ mod tests {
         let compressor = VideoCompressor::new(config.ffmpeg_path).unwrap();
 
         let input_file = Path::new("test_data/in/nonexistent.mp4");
-        let out_dir = Path::new("test_data/out");
 
-        let result = compressor.compress_video(input_file, out_dir);
+        let file_manager = FileManager::new("test_data/in".to_string(), "test_data/out".to_string());
+        let output = file_manager.get_output_name(input_file);
+
+        let result = compressor.compress_video(input_file, &output);
         assert!(result.is_err());
 
         match result {

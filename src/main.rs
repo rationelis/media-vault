@@ -4,14 +4,13 @@ use config::Config;
 mod compressor;
 use compressor::VideoCompressor;
 
-mod logger;
-use lazy_static::lazy_static;
-use logger::init_logger;
-use regex::Regex;
-use thiserror::Error;
+mod files;
+use files::FileManager;
 
-use std::fs;
-use std::io::Error;
+mod logger;
+use logger::init_logger;
+
+use thiserror::Error;
 use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -28,10 +27,6 @@ pub enum NodeError {
     CompressFileError(String),
 }
 
-lazy_static! {
-    static ref COMPRESS_RE: Regex = Regex::new(r"(.*)_compressed_\d+\.mp4").unwrap();
-}
-
 #[derive(Debug)]
 enum Mode {
     Buffer,
@@ -42,10 +37,9 @@ enum Mode {
 struct Node {
     mode: Mode,
     polling_interval: Duration,
-    in_dir: PathBuf,
-    out_dir: PathBuf,
-    compressor: VideoCompressor,
     clear_in_dir: bool,
+    file_manager: FileManager,
+    compressor: VideoCompressor,
 }
 
 impl Node {
@@ -59,12 +53,13 @@ impl Node {
         let compressor = VideoCompressor::new(config.ffmpeg_path)
             .unwrap_or_else(|e| panic!("Failed to create compressor with error: {:?}", e));
 
+        let file_manager = FileManager::new(config.in_dir.clone(), config.out_dir.clone());
+
         Node {
             mode,
             polling_interval: Duration::from_secs(config.polling_interval * 60),
-            in_dir: PathBuf::from(&config.in_dir),
-            out_dir: PathBuf::from(&config.out_dir),
             clear_in_dir: config.clear_in_dir,
+            file_manager,
             compressor,
         }
     }
@@ -80,10 +75,28 @@ impl Node {
         }
     }
 
-    fn handle_buffer_mode(&self) {
-        let scan_in = self.scan_directory(&self.in_dir);
+    fn scan_and_filter<F>(&self, scan_func: F) -> Result<Vec<PathBuf>, NodeError>
+    where
+        F: Fn() -> Result<Vec<PathBuf>, NodeError>,
+    {
+        match scan_func() {
+            Ok(files) => {
+                let filtered_files: Vec<PathBuf> = files.into_iter().filter(|file| file.extension().is_some()).collect();
+                Ok(filtered_files)
+            }
+            Err(e) => {
+                Err(e)
+            }
+        }
+    }
 
-        let mut in_files = match scan_in {
+    fn handle_buffer_mode(&self) {
+        if !self.clear_in_dir {
+            log::warn!("Buffer mode is enabled but clear_in_dir is set to false. Skipping...");
+            return;
+        }
+
+        let in_files = match self.scan_and_filter(|| self.file_manager.scan_in_directory()) {
             Ok(files) => files,
             Err(e) => {
                 log::error!("Failed to scan input directory with error: {:?}", e);
@@ -91,102 +104,54 @@ impl Node {
             }
         };
 
-        in_files = in_files.into_iter().filter(|file| file.extension().is_some()).collect();
-
-        let scan_out = self.scan_directory(&self.out_dir);
-
-        let mut out_files = match scan_out {
+        let out_files = match self.scan_and_filter(|| self.file_manager.scan_out_directory()) {
             Ok(files) => files,
             Err(e) => {
                 log::error!("Failed to scan output directory with error: {:?}", e);
                 return;
             }
-        };
+        }; 
 
-        out_files = out_files.into_iter().filter(|file| file.extension().is_some()).collect();
-
-        let to_delete: Vec<_> = in_files
-            .into_iter()
-            .filter(|file| out_files.iter().any(|out_file| self.is_file_pair(file, out_file)))
-            .collect();
-
-        if to_delete.is_empty() {
-            log::info!("No files to delete");
-            return;
-        }
-
-        log::info!("Deleting files: {:?}", to_delete);
-
-        if self.clear_in_dir {
-            for file in to_delete {
-                if let Err(e) = self.remove_file(&file) {
+        in_files.into_iter().for_each(|file| {
+            if out_files.iter().any(|out_file| self.file_manager.is_file_pair(&file, out_file)) {
+                if let Err(e) = self.file_manager.remove_file(&file) {
                     log::error!("Failed to remove file: {:?} with error: {:?}", file, e);
                 }
                 log::info!("Removed file: {:?}", file);
             }
-        }
+        });
     }
 
     fn handle_worker_mode(&self) {
-        let scan_in = self.scan_directory(&self.in_dir);
-
-        let mut files = match scan_in {
+        let files = match self.scan_and_filter(|| self.file_manager.scan_in_directory()) {
             Ok(files) => files,
             Err(e) => {
                 log::error!("Failed to scan input directory with error: {:?}", e);
                 return;
             }
-        };
-
-        files = files.into_iter().filter(|file| file.extension().is_some()).collect();
-
-        for file in files {
-            log::info!("Start compressing file: {:?}", file);
-            let start_time = Instant::now();
-
-            if let Err(e) = self.compressor.compress_video(&file, &self.out_dir) {
+        }; 
+    
+        files.into_iter().for_each(|file| {
+            if let Err(e) = self.compress_video(&file) {
                 log::error!("Failed to compress file: {:?} with error: {:?}", file, e);
-                continue;
             }
-
-            let duration = start_time.elapsed().as_secs_f32().round();
-            log::info!("Done compressing file. Duration: {}s", duration);
-
-            if self.clear_in_dir {
-                if let Err(e) = self.remove_file(&file) {
-                    log::error!("Failed to remove file: {:?} with error: {:?}", file, e);
-                }
-                log::info!("Removed file: {:?}", file);
-            }
-        }
+        });
     }
 
-    fn remove_file(&self, file: &PathBuf) -> Result<(), NodeError> {
-        fs::remove_file(file).map_err(|e| NodeError::RemoveFileError(e.to_string()))
-    }
+    fn compress_video(&self, file: &PathBuf) -> Result<(), NodeError> {
+        let start_time = Instant::now();
+        let output = self.file_manager.get_output_name(&file);
 
-    fn scan_directory(&self, dir: &PathBuf) -> Result<Vec<PathBuf>, NodeError> {
-        fs::read_dir(dir)
-            .map_err(|e| NodeError::ReadDirError(e.to_string()))
-            .and_then(|dir| {
-                dir.map(|entry| entry.map(|e| e.path()))
-                    .collect::<Result<Vec<PathBuf>, Error>>()
-                    .map_err(|e| NodeError::ReadDirError(e.to_string()))
-            })
-    }
-
-    fn is_file_pair(&self, in_file: &PathBuf, out_file: &PathBuf) -> bool {
-        let in_file_name = in_file.file_name().unwrap().to_str().unwrap();
-        let out_file_name = out_file.file_name().unwrap().to_str().unwrap();
-
-        if let Some(caps) = COMPRESS_RE.captures(out_file_name) {
-            let name = caps.get(1).unwrap().as_str();
-            return in_file_name.starts_with(name);
+        if let Err(e) = self.compressor.compress_video(&file, &output) {
+            return Err(NodeError::CompressFileError(e.to_string()));
         }
 
-        false
+        let duration = start_time.elapsed().as_secs_f32().round();
+        log::info!("Done compressing file. Duration: {}s", duration);
+
+        Ok(())
     }
-}
+ }
 
 fn main() {
     let config =
@@ -197,29 +162,4 @@ fn main() {
 
     log::info!("Starting node with config: {:?}", node);
     node.run();
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_is_file_pair() {
-        let config = Config::from_file("config/config.yaml").unwrap();
-        let node = Node::new(config);
-
-        let in_file = PathBuf::from("in/PXL_20240328_160158851.TS.mp4");
-        let out_file = PathBuf::from("out/PXL_20240328_160158851_compressed_1.mp4");
-        assert!(node.is_file_pair(&in_file, &out_file));
-
-        let in_file = PathBuf::from("in/PXL_20240328_160158852.TS.mp4");
-        assert!(!node.is_file_pair(&in_file, &out_file));
-
-        let out_file = PathBuf::from("out/PXL_20240328_160158851_compressed_.mp4");
-        assert!(!node.is_file_pair(&in_file, &out_file));
-
-        let in_file = PathBuf::from("in/.mp4");
-        let out_file = PathBuf::from("out/_compressed_1.mp4");
-        assert!(node.is_file_pair(&in_file, &out_file));
-    }
 }
