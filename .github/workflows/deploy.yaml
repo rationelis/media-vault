@@ -1,12 +1,9 @@
-name: Build Docker image(s) and push to GHCR.io
+name: Deploy to GHCR.io
 
-on:
-  push:
-    branches:
-      - none
+on: workflow_dispatch
 
 jobs:
-  build-and-push:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
