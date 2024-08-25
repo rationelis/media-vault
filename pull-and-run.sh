@@ -1,5 +1,5 @@
 #!/bin/bash
-source config.env
+source runtime.env
 
 cat token.txt | docker login ghcr.io -u Rationelis --password-stdin
 
