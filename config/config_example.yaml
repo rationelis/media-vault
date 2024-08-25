@@ -1,7 +1,7 @@
 mode: worker
 polling_interval: 1
-in_dir: in
-out_dir: out
-clear_in_dir: false
+in_dir: media-vault-in
+out_dir: media-vault-out
+clear_in_dir: true
 ffmpeg_path: /usr/bin/ffmpeg
 log_level: info

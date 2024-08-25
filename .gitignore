@@ -4,5 +4,5 @@
 /media-vault-out
 
 config.yaml
-config.env
+runtime.env
 token.txt
