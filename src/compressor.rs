@@ -5,13 +5,13 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum CompressionError {
     #[error("FFmpeg not found at path: {0}")]
-    FfmpegNotFound(String),
+    FfmpegNotFound(PathBuf),
 
     #[error("Failed to execute FFmpeg: {0}")]
     ExecutionError(#[from] std::io::Error),
 
     #[error("Input file not found: {0}")]
-    InputFileNotFound(String),
+    InputFileNotFound(PathBuf),
 
     #[error("FFmpeg error: {0}")]
     FfmpegError(String),
@@ -19,12 +19,13 @@ pub enum CompressionError {
 
 #[derive(Debug)]
 pub struct VideoCompressor {
-    ffmpeg_path: String,
+    ffmpeg_path: PathBuf,
 }
 
 impl VideoCompressor {
-    pub fn new(ffmpeg_path: String) -> Result<Self, CompressionError> {
-        if !Path::new(&ffmpeg_path).exists() {
+    pub fn new(ffmpeg_path: impl Into<PathBuf>) -> Result<Self, CompressionError> {
+        let ffmpeg_path = ffmpeg_path.into();
+        if !ffmpeg_path.exists() {
             return Err(CompressionError::FfmpegNotFound(ffmpeg_path));
         }
         Ok(VideoCompressor { ffmpeg_path })
@@ -32,9 +33,7 @@ impl VideoCompressor {
 
     pub fn compress_video(&self, input_file: &Path, output: &Path) -> Result<PathBuf, CompressionError> {
         if !input_file.exists() {
-            return Err(CompressionError::InputFileNotFound(
-                input_file.to_str().unwrap().to_string(),
-            ));
+            return Err(CompressionError::InputFileNotFound(input_file.to_path_buf()));
         }
 
         let ffmpeg_args = [
@@ -50,35 +49,19 @@ impl VideoCompressor {
             "experimental",
         ];
 
-        let result = self.run_ffmpeg(input_file, &output, &ffmpeg_args);
-
-        match result {
-            Ok(result) => {
-                if !result.status.success() {
-                    eprintln!(
-                        "FFmpeg error: {}",
-                        String::from_utf8_lossy(&result.stderr).into_owned()
-                    );
-                    return Err(CompressionError::FfmpegError(
-                        String::from_utf8_lossy(&result.stderr).into_owned(),
-                    ));
-                } 
-            }
-            Err(e) => {
-                eprintln!("Failed to execute FFmpeg: {}", e);
-                return Err(e);
-            }
-        };
-
-        Ok(output.to_path_buf())
+        self.run_ffmpeg(input_file, output, &ffmpeg_args)
+            .and_then(|output_result| {
+                if !output_result.status.success() {
+                    Err(CompressionError::FfmpegError(
+                        String::from_utf8_lossy(&output_result.stderr).into_owned(),
+                    ))
+                } else {
+                    Ok(output.to_path_buf())
+                }
+            })
     }
 
-    fn run_ffmpeg(
-        &self,
-        input_file: &Path,
-        output: &Path,
-        ffmpeg_args: &[&str],
-    ) -> Result<Output, CompressionError> {
+    fn run_ffmpeg(&self, input_file: &Path, output: &Path, ffmpeg_args: &[&str]) -> Result<Output, CompressionError> {
         Command::new(&self.ffmpeg_path)
             .arg("-i")
             .arg(input_file)
@@ -94,27 +77,34 @@ mod tests {
     use super::*;
 
     use crate::config::Config;
-    use crate::FileManager;
+    use crate::files::FileManager;
     use std::fs;
+
+    const CONFIG_PATH: &str = "config/config.yaml";
+
+    fn setup_compressor() -> VideoCompressor {
+        let config = Config::from_file(CONFIG_PATH).unwrap();
+        VideoCompressor::new(config.ffmpeg_path).unwrap()
+    }
 
     #[test]
     fn test_ffmpeg_error() {
-        let compressor = VideoCompressor::new("nonexistent_path".to_string());
+        let compressor = VideoCompressor::new("nonexistent_path");
         assert!(compressor.is_err());
-        match compressor {
-            Err(CompressionError::FfmpegNotFound(path)) => assert_eq!(path, "nonexistent_path"),
-            _ => panic!("Expected FfmpegNotFound error"),
+
+        if let Err(CompressionError::FfmpegNotFound(path)) = compressor {
+            assert_eq!(path, PathBuf::from("nonexistent_path"));
+        } else {
+            panic!("Expected FfmpegNotFound error");
         }
     }
 
     #[test]
     fn test_compress_video() {
-        let config = Config::from_file("config/config.yaml").unwrap();
-        let compressor = VideoCompressor::new(config.ffmpeg_path).unwrap();
-
+        let compressor = setup_compressor();
         let input_file = Path::new("test_data/in/example.mp4");
 
-        let file_manager = FileManager::new("test_data/in".to_string(), "test_data/out".to_string());
+        let file_manager = FileManager::new("test_data/in", "test_data/out");
         let output = file_manager.get_output_name(input_file);
 
         let result = compressor.compress_video(input_file, &output);
@@ -128,22 +118,19 @@ mod tests {
 
     #[test]
     fn test_compress_video_error() {
-        let config = Config::from_file("config/config.yaml").unwrap();
-        let compressor = VideoCompressor::new(config.ffmpeg_path).unwrap();
-
+        let compressor = setup_compressor();
         let input_file = Path::new("test_data/in/nonexistent.mp4");
 
-        let file_manager = FileManager::new("test_data/in".to_string(), "test_data/out".to_string());
+        let file_manager = FileManager::new("test_data/in", "test_data/out");
         let output = file_manager.get_output_name(input_file);
 
         let result = compressor.compress_video(input_file, &output);
         assert!(result.is_err());
 
-        match result {
-            Err(CompressionError::InputFileNotFound(path)) => {
-                assert_eq!(path, "test_data/in/nonexistent.mp4")
-            }
-            _ => panic!("Expected InputFileNotFound error"),
+        if let Err(CompressionError::InputFileNotFound(path)) = result {
+            assert_eq!(path, input_file.to_path_buf());
+        } else {
+            panic!("Expected InputFileNotFound error");
         }
     }
 }

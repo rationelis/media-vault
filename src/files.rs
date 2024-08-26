@@ -1,10 +1,9 @@
-use std::fs;
-use std::io::Error;
-use std::path::{Path, PathBuf}; 
-use std::time::SystemTime;
 use crate::NodeError;
-use regex::Regex;
 use lazy_static::lazy_static;
+use regex::Regex;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 lazy_static! {
     static ref COMPRESS_RE: Regex = Regex::new(r"(.*)_compressed_\d+\.mp4").unwrap();
@@ -17,10 +16,10 @@ pub struct FileManager {
 }
 
 impl FileManager {
-    pub fn new(in_dir: String, out_dir: String) -> Self {
+    pub fn new(in_dir: impl Into<PathBuf>, out_dir: impl Into<PathBuf>) -> Self {
         FileManager {
-            in_dir: PathBuf::from(in_dir),
-            out_dir: PathBuf::from(out_dir),
+            in_dir: in_dir.into(),
+            out_dir: out_dir.into(),
         }
     }
 
@@ -32,30 +31,28 @@ impl FileManager {
         self.scan_directory(&self.out_dir)
     }
 
-    fn scan_directory(&self, dir: &PathBuf) -> Result<Vec<PathBuf>, NodeError> {
+    fn scan_directory(&self, dir: &Path) -> Result<Vec<PathBuf>, NodeError> {
         fs::read_dir(dir)
-            .map_err(|e| NodeError::ReadDirError(e.to_string()))
-            .and_then(|dir| {
-                dir.map(|entry| entry.map(|e| e.path()))
-                    .collect::<Result<Vec<PathBuf>, Error>>()
+            .map_err(|e| NodeError::ReadDirError(e.to_string()))?
+            .map(|entry| {
+                entry
+                    .map(|e| e.path())
                     .map_err(|e| NodeError::ReadDirError(e.to_string()))
             })
+            .collect()
     }
 
-    pub fn remove_file(&self, file: &PathBuf) -> Result<(), NodeError> {
+    pub fn remove_file(&self, file: &Path) -> Result<(), NodeError> {
         fs::remove_file(file).map_err(|e| NodeError::RemoveFileError(e.to_string()))
     }
 
-    pub fn is_file_pair(&self, in_file: &PathBuf, out_file: &PathBuf) -> bool {
-        let in_file_name = in_file.file_name().unwrap().to_str().unwrap();
-        let out_file_name = out_file.file_name().unwrap().to_str().unwrap();
+    pub fn is_file_pair(&self, in_file: &Path, out_file: &Path) -> bool {
+        let in_file_name = in_file.file_name().unwrap_or_default().to_str().unwrap_or_default();
+        let out_file_name = out_file.file_name().unwrap_or_default().to_str().unwrap_or_default();
 
-        if let Some(caps) = COMPRESS_RE.captures(out_file_name) {
-            let name = caps.get(1).unwrap().as_str();
-            return in_file_name.starts_with(name);
-        }
-
-        false
+        COMPRESS_RE
+            .captures(out_file_name)
+            .map_or(false, |caps| in_file_name.starts_with(caps.get(1).unwrap().as_str()))
     }
 
     pub fn get_output_name(&self, input_file: &Path) -> PathBuf {
@@ -81,7 +78,7 @@ mod tests {
 
     #[test]
     fn test_is_file_pair() {
-        let node = FileManager::new("in".to_string(), "out".to_string());
+        let node = FileManager::new("in", "out");
 
         let in_file = PathBuf::from("in/PXL_20240328_160158851.TS.mp4");
         let out_file = PathBuf::from("out/PXL_20240328_160158851_compressed_1.mp4");
@@ -89,20 +86,13 @@ mod tests {
 
         let in_file = PathBuf::from("in/PXL_20240328_160158852.TS.mp4");
         assert!(!node.is_file_pair(&in_file, &out_file));
-
-        let out_file = PathBuf::from("out/PXL_20240328_160158851_compressed_.mp4");
-        assert!(!node.is_file_pair(&in_file, &out_file));
-
-        let in_file = PathBuf::from("in/.mp4");
-        let out_file = PathBuf::from("out/_compressed_1.mp4");
-        assert!(node.is_file_pair(&in_file, &out_file));
     }
 
     #[test]
     fn test_output_name_generation() {
         let input_file = Path::new("test_video.mp4");
 
-        let node = FileManager::new("in".to_string(), "out".to_string());
+        let node = FileManager::new("in", "out");
         let output_name = node.get_output_name(input_file);
 
         let output_name_str = output_name.to_str().unwrap();

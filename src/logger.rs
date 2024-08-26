@@ -31,3 +31,14 @@ pub fn init_logger(level: String) -> Result<(), SetLoggerError> {
 
     TermLogger::init(level, config, TerminalMode::Mixed, ColorChoice::Auto)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_init_logger() {
+        let level = LevelFilter::Info.to_string();
+        assert!(init_logger(level).is_ok());
+    }
+}

@@ -10,10 +10,10 @@ use files::FileManager;
 mod logger;
 use logger::init_logger;
 
-use thiserror::Error;
 use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum NodeError {
@@ -81,12 +81,11 @@ impl Node {
     {
         match scan_func() {
             Ok(files) => {
-                let filtered_files: Vec<PathBuf> = files.into_iter().filter(|file| file.extension().is_some()).collect();
+                let filtered_files: Vec<PathBuf> =
+                    files.into_iter().filter(|file| file.extension().is_some()).collect();
                 Ok(filtered_files)
             }
-            Err(e) => {
-                Err(e)
-            }
+            Err(e) => Err(e),
         }
     }
 
@@ -110,10 +109,13 @@ impl Node {
                 log::error!("Failed to scan output directory with error: {:?}", e);
                 return;
             }
-        }; 
+        };
 
         in_files.into_iter().for_each(|file| {
-            if out_files.iter().any(|out_file| self.file_manager.is_file_pair(&file, out_file)) {
+            if out_files
+                .iter()
+                .any(|out_file| self.file_manager.is_file_pair(&file, out_file))
+            {
                 if let Err(e) = self.file_manager.remove_file(&file) {
                     log::error!("Failed to remove file: {:?} with error: {:?}", file, e);
                 }
@@ -129,8 +131,8 @@ impl Node {
                 log::error!("Failed to scan input directory with error: {:?}", e);
                 return;
             }
-        }; 
-    
+        };
+
         files.into_iter().for_each(|file| {
             if let Err(e) = self.compress_video(&file) {
                 log::error!("Failed to compress file: {:?} with error: {:?}", file, e);
@@ -151,11 +153,11 @@ impl Node {
 
         Ok(())
     }
- }
+}
 
 fn main() {
-    let config =
-        Config::from_file("config/config.yaml").unwrap_or_else(|e| panic!("Failed to read config file with error: {:?}", e));
+    let config = Config::from_file("config/config.yaml")
+        .unwrap_or_else(|e| panic!("Failed to read config file with error: {:?}", e));
     let _ = init_logger(config.log_level.clone());
 
     let node = Node::new(config);
