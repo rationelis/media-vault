@@ -1,4 +1,4 @@
-use crate::NodeError;
+use crate::node::NodeError;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::fs;
