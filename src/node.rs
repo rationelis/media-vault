@@ -126,19 +126,28 @@ impl Node {
         };
 
         files.into_iter().for_each(|file| {
-            if let Err(e) = self.compress_video(&file) {
+            if let Err(e) = self.compress_file(&file) {
                 log::error!("Failed to compress file: {:?} with error: {:?}", file, e);
+            } else {
+                if self.clear_in_dir {
+                    if let Err(e) = self.file_manager.remove_file(&file) {
+                        log::error!("Failed to remove file: {:?} with error: {:?}", file, e);
+                    } else {
+                        log::info!("Removed file: {:?}", file);
+                    }
+                }
             }
         });
     }
 
-    fn compress_video(&self, file: &PathBuf) -> Result<(), NodeError> {
+    fn compress_file(&self, file: &PathBuf) -> Result<(), NodeError> {
         let start_time = Instant::now();
         let output = self.file_manager.get_output_name(&file);
 
-        if let Err(e) = self.compressor.compress_video(&file, &output) {
-            return Err(NodeError::CompressFileError(e.to_string()));
-        }
+        let _ = match self.compressor.compress_file(&file, &output) {
+            Ok(output) => output,
+            Err(e) => return Err(NodeError::CompressFileError(e.to_string())),
+        };
 
         let duration = start_time.elapsed().as_secs_f32().round();
         log::info!("Done compressing file. Duration: {}s", duration);

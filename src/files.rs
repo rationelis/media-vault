@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 lazy_static! {
     static ref COMPRESS_RE: Regex = Regex::new(r"(.*)_compressed_\d+\.mp4").unwrap();
@@ -56,17 +56,19 @@ impl FileManager {
     }
 
     pub fn get_output_name(&self, input_file: &Path) -> PathBuf {
-        let timestamp = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
-        let out_name = format!(
-            "{}_compressed_{}.{}",
-            input_file.file_stem().unwrap().to_str().unwrap(),
-            timestamp,
-            input_file.extension().unwrap().to_str().unwrap()
-        );
+        let file_stem = input_file
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_else(|| panic!("Input file does not have a valid stem: {:?}", input_file));
+
+        let extension = input_file
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or_else(|| panic!("Input file does not have a valid extension: {:?}", input_file));
+
+        let out_name = format!("{}_compressed_{}.{}", file_stem, timestamp, extension);
 
         self.out_dir.join(out_name)
     }

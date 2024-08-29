@@ -13,6 +13,7 @@ use logger::init_logger;
 fn main() {
     let config = Config::from_file("config/config.yaml")
         .unwrap_or_else(|e| panic!("Failed to read config file with error: {:?}", e));
+
     let _ = init_logger(config.log_level.clone());
 
     let node = Node::new(config);
