@@ -25,7 +25,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Create config
-        run: mv config/config.yaml.example config/config.yaml
+        run: cp config/config.yaml.example config/config.yaml
 
       - name: Make in and out directories
         run: mkdir in out test_data/out
