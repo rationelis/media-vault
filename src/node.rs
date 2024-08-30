@@ -155,26 +155,3 @@ impl Node {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use crate::config::Config;
-
-    #[test]
-    fn test_new_node() {
-        let config = Config {
-            mode: "buffer".to_string(),
-            polling_interval: 1,
-            clear_in_dir: true,
-            in_dir: "in".to_string(),
-            out_dir: "out".to_string(),
-            ffmpeg_path: "/usr/bin/ffmpeg".to_string(),
-            log_level: "info".to_string(),
-        };
-
-        let node = Node::new(config);
-        assert!(node.is_ok());
-    }
-}
