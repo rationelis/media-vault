@@ -5,10 +5,13 @@ mod config;
 use config::Config;
 
 mod compressor;
+
 mod files;
 
 mod logger;
 use logger::init_logger;
+
+mod logging;
 
 fn main() {
     let config = Config::from_file("config/config.yaml")

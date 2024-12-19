@@ -5,9 +5,9 @@ use thiserror::Error;
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub mode: String,
-    pub polling_interval: u64,
     pub in_dir: String,
     pub out_dir: String,
+    pub polling_interval: u64,
     pub clear_in_dir: bool,
     pub ffmpeg_path: String,
     pub log_level: String,

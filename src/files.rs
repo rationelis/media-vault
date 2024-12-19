@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 lazy_static! {
-    static ref COMPRESS_RE: Regex = Regex::new(r"(.*)_compressed_\d+\.mp4").unwrap();
+    static ref COMPRESS_RE: Regex = Regex::new(r"(.*)_compressed_\d+(\.[a-zA-Z]+)").unwrap();
 }
 
 #[derive(Clone, Debug)]
