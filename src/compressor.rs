@@ -97,7 +97,10 @@ impl VideoCompressor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
     use std::fs;
+
+    const CONFIG_PATH: &str = "config/config.yaml";
 
     #[test]
     fn test_missing_ffmpeg() {
@@ -113,7 +116,10 @@ mod tests {
 
     #[test]
     fn test_compress_video() {
-        let compressor = VideoCompressor::new("/usr/bin/ffmpeg").unwrap();
+        let config = Config::from_file(CONFIG_PATH).unwrap();
+
+        let compressor = VideoCompressor::new(&config.ffmpeg_path).unwrap();
+
         let input_file = Path::new("test_data/in/example.mp4");
         let output = Path::new("test_data/out/example_compressed.mp4");
 
@@ -128,7 +134,10 @@ mod tests {
 
     #[test]
     fn test_compress_video_error() {
-        let compressor = VideoCompressor::new("/usr/bin/ffmpeg").unwrap();
+        let config = Config::from_file(CONFIG_PATH).unwrap();
+
+        let compressor = VideoCompressor::new(&config.ffmpeg_path).unwrap();
+
         let input_file = Path::new("test_data/in/nonexistent.mp4");
         let output = Path::new("test_data/out/nonexistent_compressed.mp4");
 
@@ -144,7 +153,10 @@ mod tests {
 
     #[test]
     fn test_unsupported_file_type() {
-        let compressor = VideoCompressor::new("/usr/bin/ffmpeg").unwrap();
+        let config = Config::from_file(CONFIG_PATH).unwrap();
+
+        let compressor = VideoCompressor::new(&config.ffmpeg_path).unwrap();
+
         let input_file = Path::new("test_data/in/example.txt");
         let output = Path::new("test_data/out/example_compressed.txt");
 

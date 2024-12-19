@@ -34,7 +34,7 @@ impl Config {
 mod tests {
     use super::*;
 
-    const CONFIG_PATH: &str = "config/config.yaml.example";
+    const CONFIG_PATH: &str = "config/config.yaml";
 
     #[test]
     fn test_config_parsing() {
